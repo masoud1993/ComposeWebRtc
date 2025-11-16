@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
 import com.tosan.composewebrtc.ui.screen.ClientScreen
 import com.tosan.composewebrtc.ui.screen.HostScreen
 import com.tosan.composewebrtc.ui.screen.MainScreen
@@ -16,7 +17,7 @@ object Main
 object Host
 
 @Serializable
-object Client
+data class Client(val server: String)
 
 @Composable
 fun DemoNavHost(
@@ -25,15 +26,23 @@ fun DemoNavHost(
     NavHost(navController = navController, startDestination = Main) {
 
         composable<Main> {
-            MainScreen()
+            MainScreen(
+                navigateToHost = { navController.navigate(Host) },
+                navigateToClient = { navController.navigate(Client(it)) }
+            )
         }
 
         composable<Host> {
-            HostScreen()
+            HostScreen(
+                navigateToMain = { navController.navigate(Main) }
+            )
         }
 
         composable<Client> {
-            ClientScreen()
+
+            val server = it.toRoute<Client>().server
+
+            ClientScreen(server)
         }
 
     }
