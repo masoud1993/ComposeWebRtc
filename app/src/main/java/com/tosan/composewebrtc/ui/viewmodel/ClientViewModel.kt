@@ -2,14 +2,14 @@ package com.tosan.composewebrtc.ui.viewmodel
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
-import com.tosan.composewebrtc.remote.socket.server.SocketServer
-import com.tosan.composewebrtc.remote.socket.server.SocketServerListener
+import com.tosan.composewebrtc.remote.socket.client.SocketClient
+import com.tosan.composewebrtc.remote.socket.client.SocketClientListener
 import com.tosan.composewebrtc.utils.MessageModel
 import com.tosan.composewebrtc.utils.MessageModelType
-import com.tosan.composewebrtc.utils.getWifiIPAddress
 import com.tosan.composewebrtc.webrtc.PeerConnectionObserver
 import com.tosan.composewebrtc.webrtc.RTCClient
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,19 +24,14 @@ import javax.inject.Inject
 
 @SuppressLint("StaticFieldLeak")
 @HiltViewModel
-class HostViewModel @Inject constructor(
+class ClientViewModel @Inject constructor(
     private val application: Application,
-    private val socketServer: SocketServer,
+    private val socketClient: SocketClient,
     private val gson: Gson
-) : ViewModel(), SocketServerListener {
-
-    private var ipAddress: String? = null
-
-    val hostAddressState: MutableStateFlow<String?> = MutableStateFlow(null)
-    val callDisconnected: MutableStateFlow<Boolean> = MutableStateFlow(false)
-
+) : ViewModel(), SocketClientListener {
 
     private var remoteView: SurfaceViewRenderer? = null
+    val callDisconnected: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     private val rtcClient: RTCClient by lazy {
         RTCClient(
@@ -44,12 +39,7 @@ class HostViewModel @Inject constructor(
                 override fun onIceCandidate(p0: IceCandidate?) {
                     super.onIceCandidate(p0)
                     rtcClient.addIceCandidate(p0)
-                    socketServer.sendDataToClient(
-                        MessageModel(
-                            MessageModelType.ICE,
-                            gson.toJson(p0)
-                        )
-                    )
+                    socketClient.sendDataToHost(MessageModel(MessageModelType.ICE, gson.toJson(p0)))
                 }
 
                 override fun onAddStream(p0: MediaStream?) {
@@ -73,32 +63,33 @@ class HostViewModel @Inject constructor(
                         }
                     }
                 }
-            }
-        ) { message ->
-            socketServer.sendDataToClient(message)
+            },
+            sendMessageToSocket = { message ->
+                socketClient.sendDataToHost(message)
+            })
+    }
+
+    fun init(serverAddress: String, onError: () -> Unit) {
+        startSocketClient(serverAddress, onError)
+    }
+
+
+    private fun startSocketClient(serverAddress: String, onError: () -> Unit) {
+        socketClient.init(serverAddress, this@ClientViewModel) {
+            onError.invoke()
         }
     }
 
-    fun init(done: (Boolean) -> Unit) {
-        ipAddress = getWifiIPAddress(application)
-        if (ipAddress == null) {
-            done(false)
-            return
+    override fun onSocketClientOpened() {
+        rtcClient.call()
+    }
+
+    override fun onSocketClientMessage(messageModel: MessageModel) {
+        when(messageModel.type){
+            MessageModelType.OFFER -> TODO()
+            MessageModelType.ANSWER -> handleAnswer(messageModel)
+            MessageModelType.ICE -> handleIceCandidate(messageModel)
         }
-
-        startSocketServer()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        socketServer.onDestroy()
-        remoteView?.release()
-        remoteView = null
-        rtcClient.onDestroy()
-    }
-
-    private fun startSocketServer() {
-        socketServer.init(this@HostViewModel)
     }
 
     private fun handleIceCandidate(messageModel: MessageModel) {
@@ -109,32 +100,8 @@ class HostViewModel @Inject constructor(
         }
     }
 
-    override fun onSocketServerNewMessage(message: MessageModel) {
-        when (message.type) {
-            MessageModelType.OFFER -> handleOffer(message)
-            MessageModelType.ANSWER -> TODO()
-            MessageModelType.ICE -> handleIceCandidate(message)
-        }
-    }
-
-    private fun handleOffer(messageModel: MessageModel) {
-        rtcClient.onRemoteSessionReceived(
-            SessionDescription(
-                SessionDescription.Type.OFFER,
-                messageModel.data.toString()
-            )
-        )
-        rtcClient.answer()
-    }
-
-    override fun onStartServer(port: Int) {
-        viewModelScope.launch {
-            hostAddressState.emit("Host Address : $ipAddress:$port")
-        }
-    }
-
-    override fun onClientDisconnected() {
-
+    private fun handleAnswer(messageModel: MessageModel) {
+        rtcClient.onRemoteSessionReceived(SessionDescription(SessionDescription.Type.ANSWER, messageModel.data.toString()))
     }
 
     fun startLocalStream(view: SurfaceViewRenderer) {
@@ -144,6 +111,14 @@ class HostViewModel @Inject constructor(
     fun prepareRemoteSurfaceView(view: org.webrtc.SurfaceViewRenderer) {
         rtcClient.initializeSurfaceView(view)
         remoteView = view
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        socketClient.onDestroy()
+        remoteView?.release()
+        remoteView = null
+        rtcClient.onDestroy()
     }
 
 }

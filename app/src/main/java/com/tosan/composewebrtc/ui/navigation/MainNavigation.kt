@@ -17,7 +17,7 @@ object Main
 object Host
 
 @Serializable
-data class Client(val server: String)
+data class Client(val serverAddress: String)
 
 @Composable
 fun DemoNavHost(
@@ -40,9 +40,12 @@ fun DemoNavHost(
 
         composable<Client> {
 
-            val server = it.toRoute<Client>().server
+            val server = it.toRoute<Client>().serverAddress
 
-            ClientScreen(server)
+            ClientScreen(
+                server,
+                navigateToMain = { navController.navigate(Main) }
+            )
         }
 
     }

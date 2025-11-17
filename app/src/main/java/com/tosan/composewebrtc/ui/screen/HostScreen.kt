@@ -33,10 +33,10 @@ fun HostScreen(
         }
     }
 
-//    val callConnectedState = hostViewModel.callDisconnected.collectAsState()
-//    if (callConnectedState.value) {
-//        navigateToMain()
-//    }
+    val callConnectedState = hostViewModel.callDisconnected.collectAsState()
+    if (callConnectedState.value) {
+        navigateToMain()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Remote surface
@@ -44,7 +44,7 @@ fun HostScreen(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-         //   hostViewModel.prepareRemoteSurfaceView(it)
+            hostViewModel.prepareRemoteSurfaceView(it)
         }
 
         Text(
@@ -67,7 +67,7 @@ fun HostScreen(
                 .clip(RoundedCornerShape(22.dp))
                 .shadow(8.dp, shape = RoundedCornerShape(12.dp))
         ) {
-      //      hostViewModel.startLocalStream(it)
+            hostViewModel.startLocalStream(it)
         }
 
         Box(
